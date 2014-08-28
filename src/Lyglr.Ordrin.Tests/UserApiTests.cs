@@ -20,7 +20,7 @@ namespace Lyglr.Ordrin.Tests
         /// The user api tests can change the password.
         /// </summary>
         [TestMethod]
-        public void UserApiTests_CanChangePassword()
+        public void UserApiTests_Success_ChangePassword()
         {
             Run(this.UserApiTests_Success_ChangePassword);
         }
