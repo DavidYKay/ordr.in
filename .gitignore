@@ -7,4 +7,10 @@ src/Lyglr.Ordrin/Lyglr.Ordrin.csproj.user
 /src/Lyglr.Ordrin/obj/Debug
 /src/Lyglr.Ordrin.Tests/bin/Debug
 /src/Lyglr.Ordrin.Tests/obj/Debug
+/src/Lyglr.Ordrin/bin/Release
+/src/Lyglr.Ordrin/obj/Release
+/src/Lyglr.Ordrin.Tests/bin/Release
+/src/Lyglr.Ordrin.Tests/obj/Release
 /src/packages
+src/Lyglr.Ordrin.0.1.0.nupkg
+src/Lyglr.Ordrin.0.1.0.nuspec
