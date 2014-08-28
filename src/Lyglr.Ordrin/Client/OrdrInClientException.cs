@@ -17,6 +17,7 @@ namespace Lyglr.Ordrin.Client
         /// Standard constructor.
         /// </summary>
         /// <param name="message">Exception message.</param>
+        /// <param name="text">User visible text.</param>
         private OrdrInClientException(string message)
             : base(message)
         {
@@ -33,30 +34,41 @@ namespace Lyglr.Ordrin.Client
         }
 
         /// <summary>
-        /// Standard constructor.
-        /// </summary>
-        /// <param name="statusCode">Status code returned by the service during the call.</param>
-        /// <param name="message">Exception message.</param>
-        /// <param name="innerException">Inner exception.</param>
-        private OrdrInClientException(HttpStatusCode statusCode, string message, Exception innerException)
-            : base(message, innerException)
-        {
-            this.StatusCode = statusCode;
-        }
-
-        /// <summary>
         /// Status code returned by the service during the call.
         /// </summary>
-        public HttpStatusCode StatusCode { get; set; }
+        public HttpStatusCode StatusCode { get; private set; }
+
+        /// <summary>
+        /// User visible text returned by the service.
+        /// </summary>
+        public string Text { get; private set; }
 
         /// <summary>
         /// Creates a new <see cref="OrdrInClientException"/>.
         /// </summary>
+        /// <param name="statusCode">The status code of the http response.</param>
         /// <param name="message">The exception message.</param>
         /// <returns>A new <see cref="OrdrInClientException"/>.</returns>
-        public static OrdrInClientException CreateException(string message)
+        public static OrdrInClientException CreateException(HttpStatusCode statusCode, string message)
         {
-            return new OrdrInClientException(message);
+            OrdrInClientException exception = new OrdrInClientException(message);
+            exception.StatusCode = statusCode;
+            return exception;
+        }
+
+        /// <summary>
+        /// Creates a new <see cref="OrdrInClientException"/>.
+        /// </summary>
+        /// <param name="statusCode">The status code of the http response.</param>
+        /// <param name="message">The exception message.</param>
+        /// <param name="text">User visible text.</param>
+        /// <returns>A new <see cref="OrdrInClientException"/>.</returns>
+        public static OrdrInClientException CreateException(HttpStatusCode statusCode, string message, string text)
+        {
+            OrdrInClientException exception = new OrdrInClientException(message);
+            exception.StatusCode = statusCode;
+            exception.Text = text;
+            return exception;
         }
 
         /// <summary>
@@ -77,9 +89,11 @@ namespace Lyglr.Ordrin.Client
         /// <returns>A new <see cref="OrdrInClientException"/>.</returns>
         public static OrdrInClientException CreateException(HttpStatusCode statusCode, Exception requestException)
         {
-            return new OrdrInClientException(statusCode, requestException.Message, requestException);
+            OrdrInClientException exception = new OrdrInClientException(requestException.Message);
+            exception.StatusCode = statusCode;
+            return exception;
         }
-
+        
         /// <summary>
         /// Creates a new <see cref="OrdrInClientException"/>.
         /// </summary>

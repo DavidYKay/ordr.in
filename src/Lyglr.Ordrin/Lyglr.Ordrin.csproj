@@ -36,23 +36,39 @@
   <ItemGroup>
     <Compile Include="Client\OrdrInBaseClient.cs" />
     <Compile Include="Client\OrdrInClientException.cs" />
+    <Compile Include="Client\OrdrInOrderClient.cs" />
+    <Compile Include="Client\OrdrInRestaurantClient.cs" />
     <Compile Include="Client\OrdrInServiceAddresses.cs" />
     <Compile Include="Client\OrdrInUserClient.cs" />
-    <Compile Include="Contracts\AccountCreation.cs" />
-    <Compile Include="Contracts\AccountInformation.cs" />
-    <Compile Include="Contracts\AccountUserId.cs" />
-    <Compile Include="Contracts\CreditCardCreation.cs" />
-    <Compile Include="Contracts\CreditCardInformation.cs" />
-    <Compile Include="Contracts\Order.cs" />
-    <Compile Include="Contracts\OrderItem.cs" />
-    <Compile Include="Contracts\UserAddress.cs" />
+    <Compile Include="Contracts\Order\GuestOrder.cs" />
+    <Compile Include="Contracts\Order\OrderCustomerService.cs" />
+    <Compile Include="Contracts\Order\OrderInformation.cs" />
+    <Compile Include="Contracts\Order\UserBaseOrder.cs" />
+    <Compile Include="Contracts\Order\UserOrder.cs" />
+    <Compile Include="Contracts\Order\UserOrderWithSavedAddress.cs" />
+    <Compile Include="Contracts\Order\UserOrderWithSavedCreditCard.cs" />
+    <Compile Include="Contracts\Order\UserOrderWithSavedInfo.cs" />
+    <Compile Include="Contracts\Restaurant\BooleanValue.cs" />
+    <Compile Include="Contracts\Restaurant\MealItem.cs" />
+    <Compile Include="Contracts\Restaurant\Restaurant.cs" />
+    <Compile Include="Contracts\Restaurant\RestaurantAddress.cs" />
+    <Compile Include="Contracts\Restaurant\RestaurantDeliveryCheck.cs" />
+    <Compile Include="Contracts\Restaurant\RestaurantDeliveryPartner.cs" />
+    <Compile Include="Contracts\Restaurant\RestaurantDetails.cs" />
+    <Compile Include="Contracts\Restaurant\RestaurantFee.cs" />
+    <Compile Include="Contracts\Restaurant\RestaurantService.cs" />
+    <Compile Include="Contracts\User\AccountCreation.cs" />
+    <Compile Include="Contracts\User\AccountInformation.cs" />
+    <Compile Include="Contracts\User\AccountUserId.cs" />
+    <Compile Include="Contracts\User\CreditCardCreation.cs" />
+    <Compile Include="Contracts\User\CreditCardInformation.cs" />
+    <Compile Include="Contracts\User\Order.cs" />
+    <Compile Include="Contracts\User\OrderItem.cs" />
+    <Compile Include="Contracts\User\UserAddress.cs" />
+    <Compile Include="Contracts\User\UserAddressCreation.cs" />
+    <Compile Include="Contracts\User\UserCredentials.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utilities.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>..\..\sln\packages\Newtonsoft.Json.6.0.4\lib\portable-net45+wp80+win8+wpa81\Newtonsoft.Json.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -60,6 +76,11 @@
   <ItemGroup>
     <TargetPlatform Include="Windows, Version=8.1" />
     <TargetPlatform Include="WindowsPhoneApp, Version=8.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.6.0.4\lib\portable-net45+wp80+win8+wpa81\Newtonsoft.Json.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

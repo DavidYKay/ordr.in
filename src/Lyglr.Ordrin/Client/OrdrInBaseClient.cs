@@ -3,7 +3,6 @@
 namespace Lyglr.Ordrin.Client
 {
     using System;
-    using System.IO;
     using System.Net;
     using System.Net.Http;
     using System.Net.Http.Headers;
@@ -20,6 +19,8 @@ namespace Lyglr.Ordrin.Client
     {
         private const string XNaamaClientAuthenticationKey = "X-NAAMA-CLIENT-AUTHENTICATION";
         private const string XNaamaClientAuthenticationValueFormat = "id=\"{0}\", version=\"1\"";
+        private const string XNaamaAuthenticationKey = "X-NAAMA-AUTHENTICATION";
+        private const string XNaamaAuthenticationValueFormat = "username=\"{0}\", response=\"{1}\", version=\"1\"";
 
         private readonly string serviceBaseUrl;
         private readonly string developerKey;
@@ -31,6 +32,16 @@ namespace Lyglr.Ordrin.Client
         /// <param name="developerKey">Developer Key from ordr.in.</param>
         protected OrdrInBaseClient(string serviceBaseUrl, string developerKey)
         {
+            if (string.IsNullOrWhiteSpace(serviceBaseUrl))
+            {
+                throw new ArgumentNullException("serviceBaseUrl");
+            }
+
+            if (string.IsNullOrWhiteSpace(developerKey))
+            {
+                throw new ArgumentNullException("developerKey");
+            }
+
             this.serviceBaseUrl = serviceBaseUrl;
             this.developerKey = developerKey;
         }
@@ -40,11 +51,59 @@ namespace Lyglr.Ordrin.Client
         /// </summary>
         /// <param name="path">Path to append onto the service url.</param>
         /// <returns>An absolute <see cref="Uri"/>.</returns>
-        protected Uri BuildRequestUri(string path)
+        private Uri BuildRequestUri(string path)
         {
             UriBuilder builder = new UriBuilder(new Uri(this.serviceBaseUrl, UriKind.Absolute));
             builder.Path = path;
             return builder.Uri;
+        }
+
+        /// <summary>
+        /// Builds the request to be sent to the service.
+        /// </summary>
+        /// <param name="method">Method of the API call.</param>
+        /// <param name="requestFormat">Request uri format.</param>
+        /// <param name="parameters">Parameters of the request uri.</param>
+        /// <returns>The http request.</returns>
+        protected HttpRequestMessage BuildRequest(HttpMethod method, string requestFormat, params object[] parameters)
+        {
+            if (method == null)
+            {
+                throw new ArgumentNullException("method");
+            }
+
+            if (requestFormat == null)
+            {
+                throw new ArgumentNullException("requestFormat");
+            }
+
+            string uriPath = Utilities.InvariantFormat(requestFormat, parameters);
+            Uri fullRequestUri = this.BuildRequestUri(uriPath);
+
+            HttpRequestMessage requestMessage = new HttpRequestMessage(method, fullRequestUri);
+
+            return requestMessage;
+        }
+
+        /// <summary>
+        /// Sets authentication on a <see cref="HttpRequestMessage"/>.
+        /// </summary>
+        /// <param name="requestMessage">The request message.</param>
+        /// <param name="email">The email required to compute the authentication hash.</param>
+        /// <param name="hashedPassword">The hashed password required to compute the authentication hash.</param>
+        protected void SetAuthentication(HttpRequestMessage requestMessage, string email, string hashedPassword)
+        {
+            // This is a valid scenario for a guest order.
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(hashedPassword))
+            {
+                return;
+            }
+
+            // Compute the auth hash. The hash required by the ordr.in API is: "hashcode = SHA256( SHA256([password]) + [email] + [uri] )".
+            // The password is already kept as a hash in this object.
+            string authHash = Utilities.CalculateSHA256(hashedPassword + email + requestMessage.RequestUri.AbsolutePath);
+
+            requestMessage.Headers.Add(XNaamaAuthenticationKey, Utilities.InvariantFormat(XNaamaAuthenticationValueFormat, email, authHash));
         }
 
         /// <summary>
@@ -89,14 +148,14 @@ namespace Lyglr.Ordrin.Client
                         return default(T);
                     }
 
-                    JObject content;
-                    using (JsonTextReader contentReader = new JsonTextReader(new StreamReader(await response.Content.ReadAsStreamAsync())))
+                    string stringContent = await response.Content.ReadAsStringAsync();
+
+                    T result;
+                    if (!TryParseContentResult(stringContent, statusCode, out result))
                     {
-                        content = JObject.Load(contentReader);
+                        response.EnsureSuccessStatusCode();    
                     }
 
-                    T result = ParseContentResult<T>(content);
-                    response.EnsureSuccessStatusCode();
                     return result;
                 }
             }
@@ -129,23 +188,38 @@ namespace Lyglr.Ordrin.Client
         /// Parses the content.
         /// </summary>
         /// <param name="content">Content return by the service.</param>
+        /// <param name="statusCode">Status code from the service.</param>
+        /// <param name="value">Returns the parsed response from the service.</param>
         /// <typeparam name="T">Type to transform the result to.</typeparam>
-        /// <returns>Returns the parsed response from the service.</returns>
-        private static T ParseContentResult<T>(JObject content)
+        /// <returns>True if the parsing succeeded.</returns>
+        private static bool TryParseContentResult<T>(string content, HttpStatusCode statusCode, out T value)
         {
-            JToken error;
-            if (content.TryGetValue("_err", out error) && error.Value<int>() == 1)
+            if (statusCode == HttpStatusCode.OK)
             {
-                JToken message;
-                if (content.TryGetValue("msg", out message))
-                {
-                    throw OrdrInClientException.CreateException(message.Value<string>());
-                }
-
-                return default(T);
+                value = JsonConvert.DeserializeObject<T>(content);
+                return true;
             }
 
-            return content.ToObject<T>();
+            JObject jsonContent = JObject.Parse(content);
+
+            JToken error;
+            if ((jsonContent.TryGetValue("_err", out error) || jsonContent.TryGetValue("_error", out error)) && error.Value<int>() == 1)
+            {
+                JToken message;
+                if (jsonContent.TryGetValue("msg", out message) || jsonContent.TryGetValue("_msg", out message))
+                {
+                    JToken text;
+                    if (jsonContent.TryGetValue("text", out text))
+                    {
+                        throw OrdrInClientException.CreateException(statusCode, message.Value<string>(), text.Value<string>());
+                    }
+
+                    throw OrdrInClientException.CreateException(statusCode, message.Value<string>());
+                }
+            }
+
+            value = default(T);
+            return false;
         }
     }
 }
