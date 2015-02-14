@@ -7,6 +7,7 @@ namespace Lyglr.Ordrin.Tests
     using System.Globalization;
     using System.Linq;
     using System.Threading;
+    using System.Threading.Tasks;
     using Lyglr.Ordrin.Client;
     using Lyglr.Ordrin.Contracts.Order;
     using Lyglr.Ordrin.Contracts.Restaurant;
@@ -17,25 +18,251 @@ namespace Lyglr.Ordrin.Tests
     public class ApiScenarioTests : TestBase
     {
         [TestMethod]
-        public void ApiScenario_Success_OrderWithSavedInfo()
+        public async Task ApiScenario_Success_OrderWithSavedInfo()
         {
-            this.Run(this.ApiScenario_Success_OrderWithSavedInfo);
+            await this.Run(async (userClient, orderClient, restaurantClient, account) =>
+                {
+                    const string zipCode = "10003";
+                    const string city = "New York";
+                    const string address = "410 Lafayette St";
+
+                    DateTime orderDate = DateTime.UtcNow.Date.AddDays(1).AddHours(19);
+
+                    List<Restaurant> deliveryList = await restaurantClient.GetDeliveryListAsync(orderDate, zipCode, city, address, CancellationToken.None);
+                    Assert.IsNotNull(deliveryList);
+                    Restaurant firstRestaurant = deliveryList.FirstOrDefault(restaurant => restaurant.IsDelivering == BooleanValue.True && restaurant.DeliveryTime > 0);
+                    Assert.IsNotNull(firstRestaurant);
+
+                    RestaurantDetails restaurantDetails = await restaurantClient.GetRestaurantDetailsAsync(firstRestaurant.Id, CancellationToken.None);
+                    Assert.IsNotNull(restaurantDetails);
+
+                    RestaurantDeliveryCheck deliveryCheck = await restaurantClient.GetDeliveryCheckAsync(firstRestaurant.Id, orderDate, zipCode, city, address, CancellationToken.None);
+                    Assert.IsNotNull(deliveryCheck);
+
+                    MealItem itemToOrder = FindItemToOrder(restaurantDetails.Menu);
+                    Assert.IsNotNull(itemToOrder);
+                    List<MealItem> options = new List<MealItem>();
+                    FindOptionsToOrder(itemToOrder, 0, ref options);
+
+                    double subtotal = Math.Round((itemToOrder.Price + options.Sum(item => item.Price)) * 10, 2);
+                    double tip = Math.Round(subtotal * 0.15, 2);
+
+                    RestaurantFee fee = await restaurantClient.GetRestaurantFeeAsync(
+                        firstRestaurant.Id, 
+                        orderDate, 
+                        subtotal.ToString(CultureInfo.InvariantCulture), 
+                        tip.ToString(CultureInfo.InvariantCulture), 
+                        zipCode, 
+                        city, 
+                        address, 
+                        CancellationToken.None);
+
+                    Assert.IsNotNull(fee);
+
+                    KeyValuePair<string, UserAddress> savedAddress = (await userClient.GetSavedAddressesAsync(CancellationToken.None)).FirstOrDefault();
+                    Assert.IsNotNull(savedAddress);
+                    Assert.IsNotNull(savedAddress.Value);
+
+                    KeyValuePair<string, CreditCardInformation> savedCC = (await userClient.GetSavedCreditCardsAsync(CancellationToken.None)).FirstOrDefault();
+                    Assert.IsNotNull(savedCC);
+                    Assert.IsNotNull(savedCC.Value);
+
+                    string tray = Utilities.InvariantFormat("{0}/10{1}", itemToOrder.Id, string.Join(string.Empty, options.Select(item => "," + item.Id)));
+
+                    UserOrderWithSavedInfo userOrderWithSavedInfo = new UserOrderWithSavedInfo
+                    {
+                        Email = account.Email,
+                        DeliveryDate = orderDate.ToString("MM-dd"),
+                        DeliveryTime = orderDate.ToString("HH:mm"),
+                        FirstName = "Bruce",
+                        LastName = "Wayne",
+                        RestaurantId = firstRestaurant.Id,
+                        Tray = tray,
+                        Tip = tip.ToString(CultureInfo.InvariantCulture),
+                        AddressNickname = savedAddress.Value.Nickname,
+                        CardNickname = savedCC.Value.Nickname
+                    };
+
+                    OrderInformation orderWithSavedInfo = await orderClient.CreateOrderAsync(userOrderWithSavedInfo, CancellationToken.None);
+                    Assert.IsNotNull(orderWithSavedInfo);
+                    Assert.IsNotNull(orderWithSavedInfo.OrderId);
+
+                    Order historyOneOrder = await userClient.GetOrderAsync(orderWithSavedInfo.OrderId, CancellationToken.None);
+                    Assert.IsNotNull(historyOneOrder);
+                    Assert.AreEqual(orderWithSavedInfo.OrderId, historyOneOrder.OrderId);
+                    Assert.AreEqual(fee.Tax, historyOneOrder.Tax);
+
+                    List<Order> historyOrders = await userClient.GetOrderHistoryAsync(CancellationToken.None);
+                    Assert.IsTrue(historyOrders.Any(order => string.Equals(orderWithSavedInfo.OrderId, order.OrderId)));
+                });
         }
 
         [TestMethod]
-        public void ApiScenario_Success_OrderWithSavedAddress()
+        public async Task ApiScenario_Success_OrderWithSavedAddress()
         {
-            this.Run(this.ApiScenario_Success_OrderWithSavedAddress);
+            await this.Run(async (userClient, orderClient, restaurantClient, account) =>
+                {
+                    const string zipCode = "10003";
+                    const string city = "New York";
+                    const string address = "410 Lafayette St";
+
+                    DateTime orderDate = DateTime.UtcNow.Date.AddDays(1).AddHours(19);
+
+                    List<Restaurant> deliveryList = await restaurantClient.GetDeliveryListAsync(orderDate, zipCode, city, address, CancellationToken.None);
+                    Assert.IsNotNull(deliveryList);
+                    Restaurant firstRestaurant = deliveryList.FirstOrDefault(restaurant => restaurant.IsDelivering == BooleanValue.True && restaurant.DeliveryTime > 0);
+                    Assert.IsNotNull(firstRestaurant);
+
+                    RestaurantDetails restaurantDetails = await restaurantClient.GetRestaurantDetailsAsync(firstRestaurant.Id, CancellationToken.None);
+                    Assert.IsNotNull(restaurantDetails);
+
+                    RestaurantDeliveryCheck deliveryCheck = await restaurantClient.GetDeliveryCheckAsync(firstRestaurant.Id, orderDate, zipCode, city, address, CancellationToken.None);
+                    Assert.IsNotNull(deliveryCheck);
+
+                    MealItem itemToOrder = FindItemToOrder(restaurantDetails.Menu);
+                    Assert.IsNotNull(itemToOrder);
+                    List<MealItem> options = new List<MealItem>();
+                    FindOptionsToOrder(itemToOrder, 0, ref options);
+
+                    double subtotal = Math.Round((itemToOrder.Price + options.Sum(item => item.Price)) * 10, 2);
+                    double tip = Math.Round(subtotal * 0.15, 2);
+
+                    RestaurantFee fee = await restaurantClient.GetRestaurantFeeAsync(
+                        firstRestaurant.Id, 
+                        orderDate, 
+                        subtotal.ToString(CultureInfo.InvariantCulture), 
+                        tip.ToString(CultureInfo.InvariantCulture), 
+                        zipCode, 
+                        city, 
+                        address, 
+                        CancellationToken.None);
+
+                    Assert.IsNotNull(fee);
+
+                    KeyValuePair<string, UserAddress> savedAddress = (await userClient.GetSavedAddressesAsync(CancellationToken.None)).FirstOrDefault();
+                    Assert.IsNotNull(savedAddress);
+                    Assert.IsNotNull(savedAddress.Value);
+
+                    string tray = Utilities.InvariantFormat("{0}/10{1}", itemToOrder.Id, string.Join(string.Empty, options.Select(item => "," + item.Id)));
+
+                    UserOrderWithSavedAddress userOrderWithSavedAddress = new UserOrderWithSavedAddress()
+                    {
+                        Email = account.Email,
+                        DeliveryDate = orderDate.ToString("MM-dd"),
+                        DeliveryTime = orderDate.ToString("HH:mm"),
+                        FirstName = "Bruce",
+                        LastName = "Wayne",
+                        RestaurantId = firstRestaurant.Id,
+                        Tray = tray,
+                        Tip = tip.ToString(CultureInfo.InvariantCulture),
+                        AddressNickname = savedAddress.Value.Nickname,
+                        BillingAddress = "1007 Mountain Drive",
+                        BillingCity = "Gotham City",
+                        BillingZip = "08224",
+                        BillingState = "NJ",
+                        BillingPhone = "(609) 545-5617",
+                        CardCvc = "000",
+                        CardExpiry = "12/2121",
+                        CardNumber = "4111111111111111",
+                        CardName = "Bruce Wayne"
+                    };
+
+                    OrderInformation orderWithSavedInfo = await orderClient.CreateOrderAsync(userOrderWithSavedAddress, CancellationToken.None);
+                    Assert.IsNotNull(orderWithSavedInfo);
+                    Assert.IsNotNull(orderWithSavedInfo.OrderId);
+
+                    Order historyOneOrder = await userClient.GetOrderAsync(orderWithSavedInfo.OrderId, CancellationToken.None);
+                    Assert.IsNotNull(historyOneOrder);
+                    Assert.AreEqual(orderWithSavedInfo.OrderId, historyOneOrder.OrderId);
+                    Assert.AreEqual(fee.Tax, historyOneOrder.Tax);
+
+                    List<Order> historyOrders = await userClient.GetOrderHistoryAsync(CancellationToken.None);
+                    Assert.IsTrue(historyOrders.Any(order => string.Equals(orderWithSavedInfo.OrderId, order.OrderId)));
+                });
         }
 
         [TestMethod]
-        public void ApiScenario_Success_OrderWithSavedCC()
+        public async Task ApiScenario_Success_OrderWithSavedCC()
         {
-            this.Run(this.ApiScenario_Success_OrderWithSavedCC);
+            await this.Run(async (userClient, orderClient, restaurantClient, account) =>
+                {
+                    const string zipCode = "10003";
+                    const string city = "New York";
+                    const string address = "410 Lafayette St";
+
+                    DateTime orderDate = DateTime.UtcNow.Date.AddDays(1).AddHours(19);
+
+                    List<Restaurant> deliveryList = await restaurantClient.GetDeliveryListAsync(orderDate, zipCode, city, address, CancellationToken.None);
+                    Assert.IsNotNull(deliveryList);
+                    Restaurant firstRestaurant = deliveryList.FirstOrDefault(restaurant => restaurant.IsDelivering == BooleanValue.True && restaurant.DeliveryTime > 0);
+                    Assert.IsNotNull(firstRestaurant);
+
+                    RestaurantDetails restaurantDetails = await restaurantClient.GetRestaurantDetailsAsync(firstRestaurant.Id, CancellationToken.None);
+                    Assert.IsNotNull(restaurantDetails);
+
+                    RestaurantDeliveryCheck deliveryCheck = await restaurantClient.GetDeliveryCheckAsync(firstRestaurant.Id, orderDate, zipCode, city, address, CancellationToken.None);
+                    Assert.IsNotNull(deliveryCheck);
+
+                    MealItem itemToOrder = FindItemToOrder(restaurantDetails.Menu);
+                    Assert.IsNotNull(itemToOrder);
+                    List<MealItem> options = new List<MealItem>();
+                    FindOptionsToOrder(itemToOrder, 0, ref options);
+
+                    double subtotal = Math.Round((itemToOrder.Price + options.Sum(item => item.Price)) * 10, 2);
+                    double tip = Math.Round(subtotal * 0.15, 2);
+
+                    RestaurantFee fee = await restaurantClient.GetRestaurantFeeAsync(
+                        firstRestaurant.Id, 
+                        orderDate, 
+                        subtotal.ToString(CultureInfo.InvariantCulture), 
+                        tip.ToString(CultureInfo.InvariantCulture), 
+                        zipCode, 
+                        city, 
+                        address, 
+                        CancellationToken.None);
+
+                    Assert.IsNotNull(fee);
+
+                    KeyValuePair<string, CreditCardInformation> savedCC = (await userClient.GetSavedCreditCardsAsync(CancellationToken.None)).FirstOrDefault();
+                    Assert.IsNotNull(savedCC);
+                    Assert.IsNotNull(savedCC.Value);
+
+                    string tray = Utilities.InvariantFormat("{0}/10{1}", itemToOrder.Id, string.Join(string.Empty, options.Select(item => "," + item.Id)));
+
+                    UserOrderWithSavedCreditCard userOrderWithSavedCC = new UserOrderWithSavedCreditCard
+                    {
+                        Email = account.Email,
+                        DeliveryDate = orderDate.ToString("MM-dd"),
+                        DeliveryTime = orderDate.ToString("HH:mm"),
+                        FirstName = "Bruce",
+                        LastName = "Wayne",
+                        RestaurantId = firstRestaurant.Id,
+                        Tray = tray,
+                        Tip = tip.ToString(CultureInfo.InvariantCulture),
+                        CardNickname = savedCC.Value.Nickname,
+                        Address = "410 Lafayette St",
+                        City = "New York",
+                        Zip = "10003",
+                        State = "NY",
+                        Phone = "(609) 545-5617"
+                    };
+
+                    OrderInformation orderWithSavedInfo = await orderClient.CreateOrderAsync(userOrderWithSavedCC, CancellationToken.None);
+                    Assert.IsNotNull(orderWithSavedInfo);
+                    Assert.IsNotNull(orderWithSavedInfo.OrderId);
+
+                    Order historyOneOrder = await userClient.GetOrderAsync(orderWithSavedInfo.OrderId, CancellationToken.None);
+                    Assert.IsNotNull(historyOneOrder);
+                    Assert.AreEqual(orderWithSavedInfo.OrderId, historyOneOrder.OrderId);
+                    Assert.AreEqual(fee.Tax, historyOneOrder.Tax);
+
+                    List<Order> historyOrders = await userClient.GetOrderHistoryAsync(CancellationToken.None);
+                    Assert.IsTrue(historyOrders.Any(order => string.Equals(orderWithSavedInfo.OrderId, order.OrderId)));
+                });
         }
 
         [TestMethod]
-        public void ApiScenario_Success_GuestOrder()
+        public async Task ApiScenario_Success_GuestOrder()
         {
             const string zipCode = "10003";
             const string city = "New York";
@@ -46,15 +273,15 @@ namespace Lyglr.Ordrin.Tests
 
             DateTime orderDate = DateTime.UtcNow.Date.AddDays(1).AddHours(19);
 
-            List<Restaurant> deliveryList = restaurantClient.GetDeliveryListAsync(orderDate, zipCode, city, address, CancellationToken.None).Result;
+            List<Restaurant> deliveryList = await restaurantClient.GetDeliveryListAsync(orderDate, zipCode, city, address, CancellationToken.None);
             Assert.IsNotNull(deliveryList);
             Restaurant firstRestaurant = deliveryList.FirstOrDefault(restaurant => restaurant.IsDelivering == BooleanValue.True && restaurant.DeliveryTime > 0);
             Assert.IsNotNull(firstRestaurant);
 
-            RestaurantDetails restaurantDetails = restaurantClient.GetRestaurantDetailsAsync(firstRestaurant.Id, CancellationToken.None).Result;
+            RestaurantDetails restaurantDetails = await restaurantClient.GetRestaurantDetailsAsync(firstRestaurant.Id, CancellationToken.None);
             Assert.IsNotNull(restaurantDetails);
 
-            RestaurantDeliveryCheck deliveryCheck = restaurantClient.GetDeliveryCheckAsync(firstRestaurant.Id, orderDate, zipCode, city, address, CancellationToken.None).Result;
+            RestaurantDeliveryCheck deliveryCheck = await restaurantClient.GetDeliveryCheckAsync(firstRestaurant.Id, orderDate, zipCode, city, address, CancellationToken.None);
             Assert.IsNotNull(deliveryCheck);
 
             MealItem itemToOrder = FindItemToOrder(restaurantDetails.Menu);
@@ -65,7 +292,16 @@ namespace Lyglr.Ordrin.Tests
             double subtotal = Math.Round((itemToOrder.Price + options.Sum(item => item.Price)) * 10, 2);
             double tip = Math.Round(subtotal * 0.15, 2);
 
-            RestaurantFee fee = restaurantClient.GetRestaurantFeeAsync(firstRestaurant.Id, orderDate, subtotal.ToString(CultureInfo.InvariantCulture), tip.ToString(CultureInfo.InvariantCulture), zipCode, city, address, CancellationToken.None).Result;
+            RestaurantFee fee = await restaurantClient.GetRestaurantFeeAsync(
+                firstRestaurant.Id, 
+                orderDate, 
+                subtotal.ToString(CultureInfo.InvariantCulture), 
+                tip.ToString(CultureInfo.InvariantCulture), 
+                zipCode, 
+                city, 
+                address, 
+                CancellationToken.None);
+
             Assert.IsNotNull(fee);
 
             string tray = Utilities.InvariantFormat("{0}/10{1}", itemToOrder.Id, string.Join(string.Empty, options.Select(item => "," + item.Id)));
@@ -96,216 +332,11 @@ namespace Lyglr.Ordrin.Tests
                 CardName = "Bruce Wayne"
             };
 
-            OrderInformation orderWithSavedInfo = orderClient.CreateOrderAsync(userOrderWithSavedCC, CancellationToken.None).Result;
+            OrderInformation orderWithSavedInfo = await orderClient.CreateOrderAsync(userOrderWithSavedCC, CancellationToken.None);
             Assert.IsNotNull(orderWithSavedInfo);
             Assert.IsNotNull(orderWithSavedInfo.OrderId);
         }
-
-        public void ApiScenario_Success_OrderWithSavedInfo(OrdrInUserClient userClient, OrdrInOrderClient orderClient, OrdrInRestaurantClient restaurantClient, AccountCreation account)
-        {
-            const string zipCode = "10003";
-            const string city = "New York";
-            const string address = "410 Lafayette St";
-
-            DateTime orderDate = DateTime.UtcNow.Date.AddDays(1).AddHours(19);
-
-            List<Restaurant> deliveryList = restaurantClient.GetDeliveryListAsync(orderDate, zipCode, city, address, CancellationToken.None).Result;
-            Assert.IsNotNull(deliveryList);
-            Restaurant firstRestaurant = deliveryList.FirstOrDefault(restaurant => restaurant.IsDelivering == BooleanValue.True && restaurant.DeliveryTime > 0);
-            Assert.IsNotNull(firstRestaurant);
-
-            RestaurantDetails restaurantDetails = restaurantClient.GetRestaurantDetailsAsync(firstRestaurant.Id, CancellationToken.None).Result;
-            Assert.IsNotNull(restaurantDetails);
-
-            RestaurantDeliveryCheck deliveryCheck = restaurantClient.GetDeliveryCheckAsync(firstRestaurant.Id, orderDate, zipCode, city, address, CancellationToken.None).Result;
-            Assert.IsNotNull(deliveryCheck);
-
-            MealItem itemToOrder = FindItemToOrder(restaurantDetails.Menu);
-            Assert.IsNotNull(itemToOrder);
-            List<MealItem> options = new List<MealItem>();
-            FindOptionsToOrder(itemToOrder, 0, ref options);
-
-            double subtotal = Math.Round((itemToOrder.Price + options.Sum(item => item.Price)) * 10, 2);
-            double tip = Math.Round(subtotal * 0.15, 2);
-
-            RestaurantFee fee = restaurantClient.GetRestaurantFeeAsync(firstRestaurant.Id, orderDate, subtotal.ToString(CultureInfo.InvariantCulture), tip.ToString(CultureInfo.InvariantCulture), zipCode, city, address, CancellationToken.None).Result;
-            Assert.IsNotNull(fee);
-
-            KeyValuePair<string, UserAddress> savedAddress = userClient.GetSavedAddressesAsync(CancellationToken.None).Result.FirstOrDefault();
-            Assert.IsNotNull(savedAddress);
-            Assert.IsNotNull(savedAddress.Value);
-
-            KeyValuePair<string, CreditCardInformation> savedCC = userClient.GetSavedCreditCardsAsync(CancellationToken.None).Result.FirstOrDefault();
-            Assert.IsNotNull(savedCC);
-            Assert.IsNotNull(savedCC.Value);
-
-            string tray = Utilities.InvariantFormat("{0}/10{1}", itemToOrder.Id, string.Join(string.Empty, options.Select(item => "," + item.Id)));
-
-            UserOrderWithSavedInfo userOrderWithSavedInfo = new UserOrderWithSavedInfo
-                {
-                    Email = account.Email,
-                    DeliveryDate = orderDate.ToString("MM-dd"),
-                    DeliveryTime = orderDate.ToString("HH:mm"),
-                    FirstName = "Bruce",
-                    LastName = "Wayne",
-                    RestaurantId = firstRestaurant.Id,
-                    Tray = tray,
-                    Tip = tip.ToString(CultureInfo.InvariantCulture),
-                    AddressNickname = savedAddress.Value.Nickname,
-                    CardNickname = savedCC.Value.Nickname
-                };
-
-            OrderInformation orderWithSavedInfo = orderClient.CreateOrderAsync(userOrderWithSavedInfo, CancellationToken.None).Result;
-            Assert.IsNotNull(orderWithSavedInfo);
-            Assert.IsNotNull(orderWithSavedInfo.OrderId);
-
-            Order historyOneOrder = userClient.GetOrderAsync(orderWithSavedInfo.OrderId, CancellationToken.None).Result;
-            Assert.IsNotNull(historyOneOrder);
-            Assert.AreEqual(orderWithSavedInfo.OrderId, historyOneOrder.OrderId);
-            Assert.AreEqual(fee.Tax, historyOneOrder.Tax);
-
-            List<Order> historyOrders = userClient.GetOrderHistoryAsync(CancellationToken.None).Result;
-            Assert.IsTrue(historyOrders.Any(order => string.Equals(orderWithSavedInfo.OrderId, order.OrderId)));
-        }
-
-        public void ApiScenario_Success_OrderWithSavedAddress(OrdrInUserClient userClient, OrdrInOrderClient orderClient, OrdrInRestaurantClient restaurantClient, AccountCreation account)
-        {
-            const string zipCode = "10003";
-            const string city = "New York";
-            const string address = "410 Lafayette St";
-
-            DateTime orderDate = DateTime.UtcNow.Date.AddDays(1).AddHours(19);
-
-            List<Restaurant> deliveryList = restaurantClient.GetDeliveryListAsync(orderDate, zipCode, city, address, CancellationToken.None).Result;
-            Assert.IsNotNull(deliveryList);
-            Restaurant firstRestaurant = deliveryList.FirstOrDefault(restaurant => restaurant.IsDelivering == BooleanValue.True && restaurant.DeliveryTime > 0);
-            Assert.IsNotNull(firstRestaurant);
-
-            RestaurantDetails restaurantDetails = restaurantClient.GetRestaurantDetailsAsync(firstRestaurant.Id, CancellationToken.None).Result;
-            Assert.IsNotNull(restaurantDetails);
-
-            RestaurantDeliveryCheck deliveryCheck = restaurantClient.GetDeliveryCheckAsync(firstRestaurant.Id, orderDate, zipCode, city, address, CancellationToken.None).Result;
-            Assert.IsNotNull(deliveryCheck);
-
-            MealItem itemToOrder = FindItemToOrder(restaurantDetails.Menu);
-            Assert.IsNotNull(itemToOrder);
-            List<MealItem> options = new List<MealItem>();
-            FindOptionsToOrder(itemToOrder, 0, ref options);
-
-            double subtotal = Math.Round((itemToOrder.Price + options.Sum(item => item.Price)) * 10, 2);
-            double tip = Math.Round(subtotal * 0.15, 2);
-
-            RestaurantFee fee = restaurantClient.GetRestaurantFeeAsync(firstRestaurant.Id, orderDate, subtotal.ToString(CultureInfo.InvariantCulture), tip.ToString(CultureInfo.InvariantCulture), zipCode, city, address, CancellationToken.None).Result;
-            Assert.IsNotNull(fee);
-
-            KeyValuePair<string, UserAddress> savedAddress = userClient.GetSavedAddressesAsync(CancellationToken.None).Result.FirstOrDefault();
-            Assert.IsNotNull(savedAddress);
-            Assert.IsNotNull(savedAddress.Value);
-            
-            string tray = Utilities.InvariantFormat("{0}/10{1}", itemToOrder.Id, string.Join(string.Empty, options.Select(item => "," + item.Id)));
-
-            UserOrderWithSavedAddress userOrderWithSavedAddress = new UserOrderWithSavedAddress()
-            {
-                Email = account.Email,
-                DeliveryDate = orderDate.ToString("MM-dd"),
-                DeliveryTime = orderDate.ToString("HH:mm"),
-                FirstName = "Bruce",
-                LastName = "Wayne",
-                RestaurantId = firstRestaurant.Id,
-                Tray = tray,
-                Tip = tip.ToString(CultureInfo.InvariantCulture),
-                AddressNickname = savedAddress.Value.Nickname,
-                BillingAddress = "1007 Mountain Drive",
-                BillingCity = "Gotham City",
-                BillingZip = "08224",
-                BillingState = "NJ",
-                BillingPhone = "(609) 545-5617",
-                CardCvc = "000",
-                CardExpiry = "12/2121",
-                CardNumber = "4111111111111111",
-                CardName = "Bruce Wayne"
-            };
-
-            OrderInformation orderWithSavedInfo = orderClient.CreateOrderAsync(userOrderWithSavedAddress, CancellationToken.None).Result;
-            Assert.IsNotNull(orderWithSavedInfo);
-            Assert.IsNotNull(orderWithSavedInfo.OrderId);
-
-            Order historyOneOrder = userClient.GetOrderAsync(orderWithSavedInfo.OrderId, CancellationToken.None).Result;
-            Assert.IsNotNull(historyOneOrder);
-            Assert.AreEqual(orderWithSavedInfo.OrderId, historyOneOrder.OrderId);
-            Assert.AreEqual(fee.Tax, historyOneOrder.Tax);
-
-            List<Order> historyOrders = userClient.GetOrderHistoryAsync(CancellationToken.None).Result;
-            Assert.IsTrue(historyOrders.Any(order => string.Equals(orderWithSavedInfo.OrderId, order.OrderId)));
-        }
-
-        public void ApiScenario_Success_OrderWithSavedCC(OrdrInUserClient userClient, OrdrInOrderClient orderClient, OrdrInRestaurantClient restaurantClient, AccountCreation account)
-        {
-            const string zipCode = "10003";
-            const string city = "New York";
-            const string address = "410 Lafayette St";
-
-            DateTime orderDate = DateTime.UtcNow.Date.AddDays(1).AddHours(19);
-
-            List<Restaurant> deliveryList = restaurantClient.GetDeliveryListAsync(orderDate, zipCode, city, address, CancellationToken.None).Result;
-            Assert.IsNotNull(deliveryList);
-            Restaurant firstRestaurant = deliveryList.FirstOrDefault(restaurant => restaurant.IsDelivering == BooleanValue.True && restaurant.DeliveryTime > 0);
-            Assert.IsNotNull(firstRestaurant);
-
-            RestaurantDetails restaurantDetails = restaurantClient.GetRestaurantDetailsAsync(firstRestaurant.Id, CancellationToken.None).Result;
-            Assert.IsNotNull(restaurantDetails);
-
-            RestaurantDeliveryCheck deliveryCheck = restaurantClient.GetDeliveryCheckAsync(firstRestaurant.Id, orderDate, zipCode, city, address, CancellationToken.None).Result;
-            Assert.IsNotNull(deliveryCheck);
-
-            MealItem itemToOrder = FindItemToOrder(restaurantDetails.Menu);
-            Assert.IsNotNull(itemToOrder);
-            List<MealItem> options = new List<MealItem>();
-            FindOptionsToOrder(itemToOrder, 0, ref options);
-
-            double subtotal = Math.Round((itemToOrder.Price + options.Sum(item => item.Price)) * 10, 2);
-            double tip = Math.Round(subtotal * 0.15, 2);
-
-            RestaurantFee fee = restaurantClient.GetRestaurantFeeAsync(firstRestaurant.Id, orderDate, subtotal.ToString(CultureInfo.InvariantCulture), tip.ToString(CultureInfo.InvariantCulture), zipCode, city, address, CancellationToken.None).Result;
-            Assert.IsNotNull(fee);
-
-            KeyValuePair<string, CreditCardInformation> savedCC = userClient.GetSavedCreditCardsAsync(CancellationToken.None).Result.FirstOrDefault();
-            Assert.IsNotNull(savedCC);
-            Assert.IsNotNull(savedCC.Value);
-
-            string tray = Utilities.InvariantFormat("{0}/10{1}", itemToOrder.Id, string.Join(string.Empty, options.Select(item => "," + item.Id)));
-
-            UserOrderWithSavedCreditCard userOrderWithSavedCC = new UserOrderWithSavedCreditCard
-            {
-                Email = account.Email,
-                DeliveryDate = orderDate.ToString("MM-dd"),
-                DeliveryTime = orderDate.ToString("HH:mm"),
-                FirstName = "Bruce",
-                LastName = "Wayne",
-                RestaurantId = firstRestaurant.Id,
-                Tray = tray,
-                Tip = tip.ToString(CultureInfo.InvariantCulture),
-                CardNickname = savedCC.Value.Nickname,
-                Address = "410 Lafayette St",
-                City = "New York",
-                Zip = "10003",
-                State = "NY",
-                Phone = "(609) 545-5617"
-            };
-
-            OrderInformation orderWithSavedInfo = orderClient.CreateOrderAsync(userOrderWithSavedCC, CancellationToken.None).Result;
-            Assert.IsNotNull(orderWithSavedInfo);
-            Assert.IsNotNull(orderWithSavedInfo.OrderId);
-
-            Order historyOneOrder = userClient.GetOrderAsync(orderWithSavedInfo.OrderId, CancellationToken.None).Result;
-            Assert.IsNotNull(historyOneOrder);
-            Assert.AreEqual(orderWithSavedInfo.OrderId, historyOneOrder.OrderId);
-            Assert.AreEqual(fee.Tax, historyOneOrder.Tax);
-
-            List<Order> historyOrders = userClient.GetOrderHistoryAsync(CancellationToken.None).Result;
-            Assert.IsTrue(historyOrders.Any(order => string.Equals(orderWithSavedInfo.OrderId, order.OrderId)));
-        }
-
+        
         private static MealItem FindItemToOrder(List<MealItem> items)
         {
             if (items != null && items.Count > 0)
@@ -346,7 +377,7 @@ namespace Lyglr.Ordrin.Tests
             }
         }
 
-        private void Run(Action<OrdrInUserClient, OrdrInOrderClient, OrdrInRestaurantClient, AccountCreation> testToRun)
+        private async Task Run(Func<OrdrInUserClient, OrdrInOrderClient, OrdrInRestaurantClient, AccountCreation, Task> testToRun)
         {
             string email = Utilities.InvariantFormat("{0}@test.com", Guid.NewGuid().ToString("N"));
             string password = Utilities.CalculateSHA256(Guid.NewGuid().ToString("N"));
@@ -365,7 +396,7 @@ namespace Lyglr.Ordrin.Tests
                 LastName = "Wayne"
             };
 
-            client.CreateAccountAsync(userAccountInformation, CancellationToken.None).Wait();
+            await client.CreateAccountAsync(userAccountInformation, CancellationToken.None);
 
             // Create a default address
             UserAddressCreation newAddress = new UserAddressCreation
@@ -379,7 +410,7 @@ namespace Lyglr.Ordrin.Tests
                 Phone = "(609) 545-5617"
             };
 
-            client.CreateOrReplaceAddressAsync(newAddress, CancellationToken.None).Wait();
+            await client.CreateOrReplaceAddressAsync(newAddress, CancellationToken.None);
 
             // Create a default card
             CreditCardCreation newCreditCard = new CreditCardCreation
@@ -395,10 +426,10 @@ namespace Lyglr.Ordrin.Tests
                 CardNumber = "4111111111111111"
             };
 
-            client.CreateOrReplaceCreditCardAsync(newCreditCard, CancellationToken.None).Wait();
+            await client.CreateOrReplaceCreditCardAsync(newCreditCard, CancellationToken.None);
 
             // Run the test
-            testToRun(client, orderClient, restaurantClient, userAccountInformation);
+            await testToRun(client, orderClient, restaurantClient, userAccountInformation);
         }
     }
 }
