@@ -2,36 +2,31 @@
 
 namespace Lyglr.Ordrin
 {
-    using System.Globalization;
-    using Windows.Security.Cryptography;
-    using Windows.Security.Cryptography.Core;
-    using Windows.Storage.Streams;
+		using System;
+    	using System.Globalization;
+		using PCLCrypto;
+		// using System.Security.Cryptography;
+		using System.Text;
+//    using Windows.Security.Cryptography;
+//    using Windows.Security.Cryptography.Core;
+//    using Windows.Storage.Streams;
 
     /// <summary>
     /// Utilities set.
     /// </summary>
     public class Utilities
     {
-        /// <summary>
-        /// Calculates the SHA256 result from a string <see cref="value"/>.
-        /// </summary>
-        /// <remarks>Following: http://stackoverflow.com/questions/12503032/how-to-create-sha-256-hashes-in-winrt</remarks>
-        /// <param name="value">Value to hash.</param>
-        /// <returns>The hashed value.</returns>
-        public static string CalculateSHA256(string value)
+        /// Calculates the SHA256 result from a string 
+        public static string CalculateSHA256(string text)
         {
-            // put the string in a buffer, UTF-8 encoded...
-            IBuffer input = CryptographicBuffer.ConvertStringToBinary(value, BinaryStringEncoding.Utf8);
-
-            // hash it...
-            HashAlgorithmProvider hasher = HashAlgorithmProvider.OpenAlgorithm("SHA256");
-            IBuffer hashed = hasher.HashData(input);
-
-            // format it...
-            return CryptographicBuffer.EncodeToHexString(hashed);
+		  byte[] data = Encoding.UTF8.GetBytes(text);
+          var hasher = WinRTCrypto.HashAlgorithmProvider.OpenAlgorithm(HashAlgorithm.Sha1);
+          byte[] hash = hasher.HashData(data);
+          string hashBase64 = Convert.ToBase64String(hash);
+          return hashBase64;
         }
 
-        /// <summary>
+		/// <summary>
         /// Invariantly formats the <paramref name="parameters"/>.
         /// </summary>
         /// <param name="format">Format to use for formatting.</param>
