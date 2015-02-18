@@ -12,7 +12,7 @@ namespace Lyglr.Ordrin.Tests
         static TestBase()
         {
             // Set me!
-            DeveloperKey = "<setme>";
+            DeveloperKey = null;
         }
 
         /// <summary>
